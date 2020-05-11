@@ -1,5 +1,7 @@
 # hpc_lecture
 
+19M18837 JI Cunyuan
+
 |          | Topic                                | Sample code               |
 | -------- | ------------------------------------ | ------------------------- |
 | Class 1  | Introduction to parallel programming |                           |

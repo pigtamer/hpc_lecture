@@ -1,13 +1,16 @@
 #include <cstdio>
 #include <cstdlib>
 #include <vector>
+#include <omp.h>
 
-template<class T>
-void merge(std::vector<T>& vec, int begin, int mid, int end) {
-  std::vector<T> tmp(end-begin+1);
+template <class T>
+void merge(std::vector<T> &vec, int begin, int mid, int end)
+{
+  std::vector<T> tmp(end - begin + 1);
   int left = begin;
-  int right = mid+1;
-  for (int i=0; i<tmp.size(); i++) { 
+  int right = mid + 1;
+  for (int i = 0; i < tmp.size(); i++)
+  {
     if (left > mid)
       tmp[i] = vec[right++];
     else if (right > end)
@@ -15,35 +18,60 @@ void merge(std::vector<T>& vec, int begin, int mid, int end) {
     else if (vec[left] <= vec[right])
       tmp[i] = vec[left++];
     else
-      tmp[i] = vec[right++]; 
+      tmp[i] = vec[right++];
   }
-  for (int i=0; i<tmp.size(); i++) 
+  for (int i = 0; i < tmp.size(); i++)
     vec[begin++] = tmp[i];
 }
 
-template<class T>
-void merge_sort(std::vector<T>& vec, int begin, int end) {
-  if(begin < end) {
+template <class T>
+bool check(std::vector<T> &vec, size_t n){
+  bool res = true;
+  for(size_t k=0; k< n-1; k++){
+    res = res&(vec[k] <= vec[k+1]);
+  }
+  printf("%d\n", res);
+  return res;
+}
+
+template <class T>
+void merge_sort(std::vector<T> &vec, int begin, int end)
+{
+  if (begin < end)
+  {
     int mid = (begin + end) / 2;
-    merge_sort(vec, begin, mid);
-    merge_sort(vec, mid+1, end);
+#pragma omp task shared(vec)
+    {
+      merge_sort(vec, begin, mid);
+      merge_sort(vec, mid + 1, end);
+    }
+#pragma omp taskwait
     merge(vec, begin, mid, end);
+    int tid = omp_get_thread_num();
+    printf("# %d ", tid);
   }
 }
 
-int main() {
-  int n = 20;
+int main()
+{
+  int n = 40;
   std::vector<int> vec(n);
-  for (int i=0; i<n; i++) {
+  for (int i = 0; i < n; i++)
+  {
     vec[i] = rand() % (10 * n);
-    printf("%d ",vec[i]);
+    printf("%d ", vec[i]);
   }
   printf("\n");
-
-  merge_sort(vec, 0, n-1);
-
-  for (int i=0; i<n; i++) {
-    printf("%d ",vec[i]);
+#pragma omp parallel
+  {
+#pragma omp single
+    merge_sort(vec, 0, n - 1);
   }
   printf("\n");
+  for (int i = 0; i < n; i++)
+  {
+    printf("%d ", vec[i]);
+  }
+  printf("\n");
+  // check(vec, n);
 }
