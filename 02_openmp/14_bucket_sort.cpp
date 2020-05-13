@@ -3,10 +3,20 @@
 #include <vector>
 #include <omp.h>
 
+template <class T>
+bool check(std::vector<T> &vec, size_t n){
+  bool res = true;
+  for(size_t k=0; k< n-1; k++){
+    res = res&(vec[k] <= vec[k+1]);
+  }
+  printf("%d\n", res);
+  return res;
+}
+
 int main()
 {
-  int n = 50;
-  int range = 100;
+  int n = 100;
+  int range = 128;
   std::vector<int> key(n);
 #pragma omp parallel for
   for (int i = 0; i < n; i++)
@@ -18,31 +28,40 @@ int main()
 
   std::vector<int> bucket(range, 0);
 #pragma omp parallel for
+  for (int i = 0; i < n; i++)
   {
-    for (int i = 0; i < n; i++)
-    {
-      bucket[key[i]]++;
-      printf("# %d ", omp_get_thread_num());
-    }
-  } // put value to the corresponding position
-  printf("\n");
+#pragma omp atomic update
+    bucket[key[i]]++;
+  }
 
-  int j = 0;
+  // build a global index for the buckets' starting locations
+  std::vector<int> cumsum = bucket;
+  for (int i = 1; i < range; i++)
+  {
+    cumsum[i] += cumsum[i - 1];
+  }
+  for (int i = range - 1; i > 0; i--)
+  {
+    cumsum[i] = cumsum[i - 1];
+  }cumsum[0] = 0;
+
+  omp_set_num_threads(range); // significant
+#pragma omp parallel for
   for (int i = 0; i < range; i++)
   {
+    int j = 0; // use a local index inside the bucket instead
     for (; bucket[i] > 0; bucket[i]--)
     {
+      key[j + cumsum[omp_get_thread_num()]] = i;
       j++;
-      key[j] = i; // write back
-
-      printf("# %d ", omp_get_thread_num());
     }
   }
 
-  printf("\n");
   for (int i = 0; i < n; i++)
   {
     printf("%d ", key[i]);
   }
   printf("\n");
+
+  // check(key, n);
 }
