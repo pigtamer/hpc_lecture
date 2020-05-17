@@ -8,8 +8,8 @@ This is the repository for "High Performance Computing" lecture of Tokyo Tech, S
 |          | Topic                                | Sample code               |
 | -------- | ------------------------------------ | ------------------------- |
 | Class 1  | Introduction to parallel programming |                           |
-| Class 2  | Shared memory parallelization        | 02_openmp ✅                |
-| Class 3  | Distributed memory parallelization   | 03_mpi                    |
+| Class 2  | Shared memory parallelization        | 02_openmp ✅              |
+| Class 3  | Distributed memory parallelization   | 03_mpi    ✅              |
 | Class 4  | SIMD parallelization                 | 04_simd                   |
 | Class 5  | GPU programming                      | 05_cuda,05_openacc        |
 | Class 6  | Parallel programing models           | 06_starpu                 |
