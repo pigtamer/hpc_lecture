@@ -45,15 +45,16 @@ int main()
     cumsum[i] = cumsum[i - 1];
   }cumsum[0] = 0;
 
-  omp_set_num_threads(range); // significant
-#pragma omp parallel for
+  int j = 0; // use a local index inside the bucket instead
+
+  #pragma omp parallel
   for (int i = 0; i < range; i++)
   {
-    int j = 0; // use a local index inside the bucket instead
+    
     for (; bucket[i] > 0; bucket[i]--)
     {
-      key[j + cumsum[omp_get_thread_num()]] = i;
-      j++;
+      key[j++] = i;
+      printf("%d\n", omp_get_thread_num());
     }
   }
 
