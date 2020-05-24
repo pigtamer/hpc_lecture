@@ -4,6 +4,7 @@
 
 This is the repository for "High Performance Computing" lecture of Tokyo Tech, Spring Semester 2020.
 
+❗️)There seem to be an upper limit of 1024 threads for the bucket sort with cuda.
 
 |          | Topic                                | Sample code               |
 | -------- | ------------------------------------ | ------------------------- |
@@ -11,7 +12,7 @@ This is the repository for "High Performance Computing" lecture of Tokyo Tech, S
 | Class 2  | Shared memory parallelization        | 02_openmp ✅              |
 | Class 3  | Distributed memory parallelization   | 03_mpi    ✅              |
 | Class 4  | SIMD parallelization                 | 04_simd   ✅              |
-| Class 5  | GPU programming                      | 05_cuda,05_openacc        |
+| Class 5  | GPU programming                      | 05_cuda,05_openacc ✅     |
 | Class 6  | Parallel programing models           | 06_starpu                 |
 | Class 7  | Cache blocking                       | 07_cache_cpu,07_cache_gpu |
 | Class 8  | High Performance Python              | 08_cython                 |
