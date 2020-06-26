@@ -1,7 +1,9 @@
 #include <iostream>
 #include <vector>
+#include <string>
 #include <array>
-#include <chrono> // for high_resolution_clock
+#include <cassert>
+#include <chrono>
 #include <math.h>
 
 using namespace std;
@@ -9,14 +11,13 @@ using namespace std;
 float lb = 0;
 float ub = 2;
 int nx = 41;
-int ny = 41;
-int nt = 20;
+int ny = 11;
+int nt = 5;
 int nit = 50;
 int c = 1;
 float dx = ub / float(nx - 1);
 float dy = ub / float(ny - 1);
 
-// X, Y = numpy.meshgrid(x, y)
 
 float rho = 1;
 float nu = 0.1;
@@ -26,13 +27,22 @@ void linspace(vector<float> &x, int lb, int ub, int num)
 {
     for (int k = 0; k < num; k++)
     {
-        x[k] = k * (ub - lb) / float(num) + lb;
+        x[k] = k * (ub - lb) / float(num - 1) + lb;
     }
 }
 
 void meshgrid(vector<float> x, vector<float> y,
               vector<vector<float>> &X, vector<vector<float>> &Y)
 {
+    int dimx = x.size();
+    int dimy = y.size();
+    assert(dimy == X.size() && dimy == Y.size());
+
+    for(int k=0; k< dimy; k++)
+        X[k] = x;
+    for(int k=0; k< dimy; k++)
+        Y[k] = vector<float>(dimx, y[k]); 
+
 }
 
 void build_up_b(vector<vector<float>> &b, float rho, float dt,
@@ -50,7 +60,6 @@ def build_up_b(b, rho, dt, u, v, dx, dy):
     for (int idx = 0; idx < xlim - 2; idx++)
         for (int idy = 0; idy < ylim - 2; idy++)
         {
-            // cout << idx << "," << idy << endl;
             b[idx + 1][idy + 1] = (rho * (1 / dt *
                                               ((u[idx + 1][idy + 2] - u[idx + 1][idy]) /
                                                    (2 * dx) +
@@ -164,15 +173,20 @@ void npprint(vector<vector<float>> u)
         cout << "]," << endl;
     }
     cout << "]" << endl;
-    cout << "-------------------------------xx" << endl;
+    cout << "x-------------------------------x" << endl;
 }
 
 int main()
 {
     vector<float> x(nx);
     vector<float> y(ny);
+    vector<vector<float>> X(ny);
+    vector<vector<float>> Y(ny);
     linspace(x, lb, ub, nx);
     linspace(y, lb, ub, ny);
+    meshgrid(x, y, X, Y);
+    npprint(X);
+    npprint(Y);
     cout << x.size() << endl;
 
     vector<vector<float>> u(ny, vector<float>(nx));
