@@ -9,9 +9,9 @@ using namespace std;
 
 float lb = 0;
 float ub = 2;
-int nx = 41;
-int ny = 41;
-int nt = 700;
+int nx = 11;
+int ny = 11;
+int nt = 10;
 int nit = 50;
 int c = 1;
 float dx = ub / float(nx - 1);
@@ -34,6 +34,12 @@ void copy(float *lhs, float *rhs, int dimx, int dimy)
     for (int k = 0; k < dimy * dimx; k++)
         rhs[k] = lhs[k];
 }
+void fill(float *x, float fillnum, int dimx, int dimy)
+{
+    for (int k = 0; k < dimy * dimx; k++)
+        x[k] = fillnum;
+}
+
 void meshgrid(float *x, float *y,
               float *X, float *Y)
 {
@@ -200,18 +206,21 @@ int main()
     // npprint(X, ny, nx);
     // npprint(Y);
 
-    float u[ny * nx] = {0};
-    float v[ny * nx] = {0};
-    float b[ny * nx] = {0};
-    float p[ny * nx] = {0};
+    float u[ny * nx]; fill(u, 0, nx, ny);
+    float v[ny * nx]; fill(v, 0, nx, ny);
+    float b[ny * nx]; fill(b, 0, nx, ny);
+    float p[ny * nx]; fill(p, 0, nx, ny);
 
     auto start = std::chrono::high_resolution_clock::now();
-    cavity_flow(nt, u, v, dt, dx, dy, p, rho, nu);
+    build_up_b(b, rho, dt, u, v, dx, dy);
+    fill(b, 1, nx, ny);
+    pressure_poisson(p, dx, dy, b);
+    // cavity_flow(nt, u, v, dt, dx, dy, p, rho, nu);
     auto finish = std::chrono::high_resolution_clock::now();
-    npprint(u);
-    npprint(v);
+    //npprint(u);
+    //npprint(v);
     npprint(p);
-    npprint(b);
+    // npprint(b);
     std::chrono::duration<double> elapsed = finish - start;
     printf("Elapsed time: %3.3f s\n", elapsed.count());
 }

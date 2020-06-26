@@ -9,8 +9,8 @@ using namespace std;
 
 float lb = 0;
 float ub = 2;
-int nx = 11;
-int ny = 11;
+const int nx = 41;
+const int ny = 41;
 int nt = 10;
 int nit = 50;
 int c = 1;
@@ -34,6 +34,14 @@ void copy(float *lhs, float *rhs, int dimx, int dimy)
     for (int k = 0; k < dimy * dimx; k++)
         rhs[k] = lhs[k];
 }
+
+void fill(float *x, float fillnum, int dimx, int dimy)
+{
+    for (int k = 0; k < dimy * dimx; k++)
+        x[k] = fillnum;
+}
+
+
 void meshgrid(float *x, float *y,
               float *X, float *Y)
 {
@@ -48,33 +56,36 @@ void meshgrid(float *x, float *y,
         }
 }
 
-void build_up_b(float *b, float rho, float dt,
-                float *u, float *v,
-                float dx, float dy)
-{
-    /*
+// __device__ void build_up_b(float *b, float rho, float dt,
+//                 float *u, float *v,
+//                 float dx, float dy,
+//             int nx, int ny)
+// {
+//     /*
 
-def build_up_b(b, rho, dt, u, v, dx, dy):
-    return b
-*/
-    int xlim = ny;
-    int ylim = nx;
+// def build_up_b(b, rho, dt, u, v, dx, dy):
+//     return b
+// */
+//     int xlim = ny;
+//     int ylim = nx;
 
-    for (int idx = 0; idx < xlim - 2; idx++)
-        for (int idy = 0; idy < ylim - 2; idy++)
-        {
-            b[(idx + 1) * nx + idy + 1] = (rho * (1 / dt *
-                                                      ((u[(idx + 1) * nx + idy + 2] - u[(idx + 1) * nx + idy]) /
-                                                           (2 * dx) +
-                                                       (v[(idx + 2) * nx + idy + 1] - v[(idx)*nx + idy + 1]) / (2 * dy)) -
-                                                  pow(((u[(idx + 1) * nx + idy + 2] - u[(idx + 1) * nx + idy]) / (2 * dx)), 2) -
-                                                  2 * ((u[(idx + 2) * nx + idy + 1] - u[(idx)*nx + idy + 1]) / (2 * dy) *
-                                                       (v[(idx + 1) * nx + idy + 2] - v[(idx + 1) * nx + idy]) / (2 * dx)) -
-                                                  pow((v[(idx + 2) * nx + idy + 1] - v[(idx)*nx + idy + 1]) / (2 * dy), 2)));
-        }
-}
+//     int idx = blockIdx.x;
+//     int idy = threadIdx.x;
+//     assert(nx = blockDim.x);
+//     if(idx >= xlim - 2) return;
+//     if (idy >= ylim - 2) return;
+//             b[(idx + 1) * nx + idy + 1] = (rho * (1 / dt *
+//                                                       ((u[(idx + 1) * nx + idy + 2] - u[(idx + 1) * nx + idy]) /
+//                                                            (2 * dx) +
+//                                                        (v[(idx + 2) * nx + idy + 1] - v[(idx)*nx + idy + 1]) / (2 * dy)) -
+//                                                   pow(((u[(idx + 1) * nx + idy + 2] - u[(idx + 1) * nx + idy]) / (2 * dx)), 2) -
+//                                                   2 * ((u[(idx + 2) * nx + idy + 1] - u[(idx)*nx + idy + 1]) / (2 * dy) *
+//                                                        (v[(idx + 1) * nx + idy + 2] - v[(idx + 1) * nx + idy]) / (2 * dx)) -
+//                                                   pow((v[(idx + 2) * nx + idy + 1] - v[(idx)*nx + idy + 1]) / (2 * dy), 2)));
 
-void pressure_poisson(float *p, float dx, float dy, float *b)
+// }
+
+__global__ void pressure_poisson(float *p, float dx, float dy, float *b, int nx, int ny, int nit)
 {
     /*
 def pressure_poisson(p, dx, dy, b):
@@ -83,92 +94,91 @@ def pressure_poisson(p, dx, dy, b):
     float *pn = p;
     int xlim = ny;
     int ylim = nx;
-
+    int idx = blockIdx.x;
+    int idy = threadIdx.x;
+    if(idx >= xlim - 2) return;
+    if (idy >= ylim - 2) return;
     for (int q = 0; q < nit; q++)
     {
-        for (int idx = 0; idx < xlim - 2; idx++)
-            for (int idy = 0; idy < ylim - 2; idy++)
-            {
+
                 pn = p;
                 p[(idx + 1) * nx + idy + 1] = (((pn[(idx + 1) * nx + idy + 2] + pn[(idx + 1) * nx + idy]) * pow(dy, 2) +
                                                 (pn[(idx + 2) * nx + idy + 1] + pn[(idx)*nx + idy + 1]) * pow(dx, 2)) /
                                                    (2 * (pow(dx, 2) + pow(dy, 2))) -
                                                pow(dx, 2) * pow(dy, 2) / (2 * (pow(dx, 2) + pow(dy, 2))) *
                                                    b[(idx + 1) * nx + idy + 1]);
-            }
-        for (int k = 0; k < ylim; k++)
-        {
-            p[0 * ylim + k] = p[1 * ylim + k]; // dp/dy = 0 at y = 0
-            p[(xlim - 1) * ylim + k] = 0;      // p = 0 at y = 2
-        }
-        for (int idx = 0; idx < xlim; idx++)
-        {
+            
+            __syncthreads();
+            p[0 * ylim + idy] = p[1 * ylim + idy]; // dp/dy = 0 at y = 0
+            p[(xlim - 1) * ylim + idy] = 0;      // p = 0 at y = 2
+        
             p[idx * ylim + ylim - 1] = p[idx * ylim + ylim - 2]; // dp/dx = 0 at x = 2
             p[idx * ylim + 0] = p[idx * ylim + 1];               // dp/dx = 0 at x = 0
-        }
+            __syncthreads();
+        
     }
 }
 
-void cavity_flow(int nt, float *u, float *v,
-                 float dt, float dx, float dy, float *p, float rho, float nu)
-{
-    /*
-    def cavity_flow(nt, u, v, dt, dx, dy, p, rho, nu):
-*/
-    int xlim = ny;
-    int ylim = nx;
-    float un[ny * nx]; // copy !!!
-    float vn[ny * nx];
-    float b[ny * nx];
+// __global__ void cavity_flow(int nt, float *u, float *v,
+//                  float dt, float dx, float dy, float *p, float rho, float nu)
+// {
+//     /*
+//     def cavity_flow(nt, u, v, dt, dx, dy, p, rho, nu):
+// */
+//     int xlim = ny;
+//     int ylim = nx;
+//     float un[ny * nx]; // copy !!!
+//     float vn[ny * nx];
+//     float b[ny * nx];
 
-    for (int n = 0; n < nt; n++)
-    {
-        copy(u, un, ny, nx);
-        copy(v, vn, ny, nx);
-        build_up_b(b, rho, dt, u, v, dx, dy);
-        pressure_poisson(p, dx, dy, b);
+//     for (int n = 0; n < nt; n++)
+//     {
+//         copy(u, un, ny, nx);
+//         copy(v, vn, ny, nx);
+//         build_up_b(b, rho, dt, u, v, dx, dy);
+//         pressure_poisson(p, dx, dy, b);
 
-        for (int idx = 0; idx < xlim - 2; idx++)
-            for (int idy = 0; idy < ylim - 2; idy++)
-            {
-                u[(idx + 1) * nx + idy + 1] = (un[(idx + 1) * nx + idy + 1] -
-                                               un[(idx + 1) * nx + idy + 1] * dt / dx *
-                                                   (un[(idx + 1) * nx + idy + 1] - un[(idx + 1) * nx + idy]) -
-                                               vn[(idx + 1) * nx + idy + 1] * dt / dy *
-                                                   (un[(idx + 1) * nx + idy + 1] - un[(idx)*nx + idy + 1]) -
-                                               dt / (2 * rho * dx) * (p[(idx + 1) * nx + idy + 2] - p[(idx + 1) * nx + idy]) +
-                                               nu * (dt / pow(dx, 2) *
-                                                         (un[(idx + 1) * nx + idy + 2] - 2 * un[(idx + 1) * nx + idy + 1] + un[(idx + 1) * nx + idy]) +
-                                                     dt / pow(dy, 2) *
-                                                         (un[(idx + 2) * nx + idy + 1] - 2 * un[(idx + 1) * nx + idy + 1] + un[(idx)*nx + idy + 1])));
+//         for (int idx = 0; idx < xlim - 2; idx++)
+//             for (int idy = 0; idy < ylim - 2; idy++)
+//             {
+//                 u[(idx + 1) * nx + idy + 1] = (un[(idx + 1) * nx + idy + 1] -
+//                                                un[(idx + 1) * nx + idy + 1] * dt / dx *
+//                                                    (un[(idx + 1) * nx + idy + 1] - un[(idx + 1) * nx + idy]) -
+//                                                vn[(idx + 1) * nx + idy + 1] * dt / dy *
+//                                                    (un[(idx + 1) * nx + idy + 1] - un[(idx)*nx + idy + 1]) -
+//                                                dt / (2 * rho * dx) * (p[(idx + 1) * nx + idy + 2] - p[(idx + 1) * nx + idy]) +
+//                                                nu * (dt / pow(dx, 2) *
+//                                                          (un[(idx + 1) * nx + idy + 2] - 2 * un[(idx + 1) * nx + idy + 1] + un[(idx + 1) * nx + idy]) +
+//                                                      dt / pow(dy, 2) *
+//                                                          (un[(idx + 2) * nx + idy + 1] - 2 * un[(idx + 1) * nx + idy + 1] + un[(idx)*nx + idy + 1])));
 
-                v[(idx + 1) * nx + idy + 1] = (vn[(idx + 1) * nx + idy + 1] -
-                                               un[(idx + 1) * nx + idy + 1] * dt / dx *
-                                                   (vn[(idx + 1) * nx + idy + 1] - vn[(idx + 1) * nx + idy]) -
-                                               vn[(idx + 1) * nx + idy + 1] * dt / dy *
-                                                   (vn[(idx + 1) * nx + idy + 1] - vn[(idx)*nx + idy + 1]) -
-                                               dt / (2 * rho * dy) * (p[(idx + 2) * nx + idy + 1] - p[(idx)*nx + idy + 1]) +
-                                               nu * (dt / pow(dx, 2) *
-                                                         (vn[(idx + 1) * nx + idy + 2] - 2 * vn[(idx + 1) * nx + idy + 1] + vn[(idx + 1) * nx + idy]) +
-                                                     dt / pow(dy, 2) *
-                                                         (vn[(idx + 2) * nx + idy + 1] - 2 * vn[(idx + 1) * nx + idy + 1] + vn[(idx)*nx + idy + 1])));
-            }
-        for (int k = 0; k < ylim; k++)
-        {
-            u[0 * ylim + k] = 0;
-            u[(xlim - 1) * ylim + k] = 10;
-            v[0 * ylim + k] = 0;
-            v[(xlim - 1) * ylim + k] = 0;
-        }
-        for (int idx = 0; idx < xlim; idx++)
-        {
-            u[idx * ylim + 0] = 0;
-            v[idx * ylim + 0] = 0;
-            u[idx * ylim + ylim - 1] = 0;
-            v[idx * ylim + ylim - 1] = 0;
-        }
-    }
-}
+//                 v[(idx + 1) * nx + idy + 1] = (vn[(idx + 1) * nx + idy + 1] -
+//                                                un[(idx + 1) * nx + idy + 1] * dt / dx *
+//                                                    (vn[(idx + 1) * nx + idy + 1] - vn[(idx + 1) * nx + idy]) -
+//                                                vn[(idx + 1) * nx + idy + 1] * dt / dy *
+//                                                    (vn[(idx + 1) * nx + idy + 1] - vn[(idx)*nx + idy + 1]) -
+//                                                dt / (2 * rho * dy) * (p[(idx + 2) * nx + idy + 1] - p[(idx)*nx + idy + 1]) +
+//                                                nu * (dt / pow(dx, 2) *
+//                                                          (vn[(idx + 1) * nx + idy + 2] - 2 * vn[(idx + 1) * nx + idy + 1] + vn[(idx + 1) * nx + idy]) +
+//                                                      dt / pow(dy, 2) *
+//                                                          (vn[(idx + 2) * nx + idy + 1] - 2 * vn[(idx + 1) * nx + idy + 1] + vn[(idx)*nx + idy + 1])));
+//             }
+//         for (int k = 0; k < ylim; k++)
+//         {
+//             u[0 * ylim + k] = 0;
+//             u[(xlim - 1) * ylim + k] = 10;
+//             v[0 * ylim + k] = 0;
+//             v[(xlim - 1) * ylim + k] = 0;
+//         }
+//         for (int idx = 0; idx < xlim; idx++)
+//         {
+//             u[idx * ylim + 0] = 0;
+//             v[idx * ylim + 0] = 0;
+//             u[idx * ylim + ylim - 1] = 0;
+//             v[idx * ylim + ylim - 1] = 0;
+//         }
+//     }
+// }
 
 void npprint(float *u, int dimx = ny, int dimy = nx, string msg="OUT: ")
 {
@@ -189,7 +199,7 @@ void npprint(float *u, int dimx = ny, int dimy = nx, string msg="OUT: ")
 __global__ void npp(float *a, int N){
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     if(i>N) return;
-    a[i] = 10;
+    a[i] = i;
 }
 int main()
 {
@@ -204,13 +214,13 @@ int main()
     // npprint(X, ny, nx);
     // npprint(Y);
 
-    float u[ny * nx] = {0};
-    float v[ny * nx] = {0};
-    float b[ny * nx] = {0};
-    float p[ny * nx] = {0};
+    float u[ny * nx]; fill(u, 0, nx, ny);
+    float v[ny * nx]; fill(v, 0, nx, ny);
+    float b[ny * nx]; fill(b, 0, nx, ny);
+    float p[ny * nx]; fill(p, 0, nx, ny);
 
     auto start = std::chrono::high_resolution_clock::now();
-    cavity_flow(nt, u, v, dt, dx, dy, p, rho, nu);
+    //cavity_flow(nt, u, v, dt, dx, dy, p, rho, nu);
     auto finish = std::chrono::high_resolution_clock::now();
     //npprint(u);
     //npprint(v);
@@ -220,9 +230,14 @@ int main()
     printf("Elapsed time: %3.3f s\n", elapsed.count());
 
     float *pg;
-
+    float *bg;
     cudaMallocManaged(&pg, nx*ny*sizeof(float));
-    npp<<<1, nx* ny>>>(pg, nx*ny);
+    cudaMallocManaged(&bg, nx*ny*sizeof(float));
+    cudaMemcpy(p, pg, nx*ny*sizeof(float), cudaMemcpyHostToDevice);
+    // npp<<<nx, ny>>>(pg, nx*ny);
+    // build_up_b<<<nx, ny>>>(bg, rho, dt, u, v, dx, dy, nx, ny);
+    fill(bg, 1, nx, ny);
+    pressure_poisson<<<nx, ny>>>(pg, dx, dy, bg, nx, ny, nit);
     cudaDeviceSynchronize();
     npprint(pg);
     cudaFree(pg);

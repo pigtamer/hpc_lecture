@@ -9,9 +9,9 @@ using namespace std;
 
 float lb = 0;
 float ub = 2;
-int nx = 41;
-int ny = 41;
-int nt = 500;
+int nx = 11;
+int ny = 11;
+int nt = 10;
 int nit = 50;
 int c = 1;
 float dx = ub / float(nx - 1);
@@ -34,6 +34,12 @@ void copy(float *lhs, float *rhs, int dimx, int dimy)
     for (int k = 0; k < dimy * dimx; k++)
         rhs[k] = lhs[k];
 }
+void zerofill(float *x, int dimx, int dimy)
+{
+    for (int k = 0; k < dimy * dimx; k++)
+        x[k] = 0;
+}
+
 void meshgrid(float *x, float *y,
               float *X, float *Y)
 {
@@ -200,18 +206,18 @@ int main()
     // npprint(X, ny, nx);
     // npprint(Y);
 
-    float u[ny * nx] = {0};
-    float v[ny * nx] = {0};
-    float b[ny * nx] = {0};
-    float p[ny * nx] = {0};
+    float u[ny * nx]; zerofill(u, nx, ny);
+    float v[ny * nx]; zerofill(v, nx, ny);
+    float b[ny * nx]; zerofill(b, nx, ny);
+    float p[ny * nx]; zerofill(p, nx, ny);
 
     auto start = std::chrono::high_resolution_clock::now();
     cavity_flow(nt, u, v, dt, dx, dy, p, rho, nu);
     auto finish = std::chrono::high_resolution_clock::now();
-    npprint(u);
-    npprint(v);
-    npprint(p);
-    npprint(b);
+    //npprint(u);
+    //npprint(v);
+    //npprint(p);
+    //npprint(b);
     std::chrono::duration<double> elapsed = finish - start;
     printf("Elapsed time: %3.3f s\n", elapsed.count());
 }
