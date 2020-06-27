@@ -11,8 +11,8 @@ float lb = 0;
 float ub = 2;
 int nx = 41;
 int ny = 41;
-int nt = 10;
-int nit = 100;
+int nt = 500;
+int nit = 50;
 int c = 1;
 float dx = ub / float(nx - 1);
 float dy = ub / float(ny - 1);
@@ -36,7 +36,6 @@ void npprint(float *u, int dimx = ny, int dimy = nx, string msg = "OUT: ") {
 
   printf("x-------------------------------x\n");
 }
-
 
 void linspace(float *x, int lb, int ub, int num) {
   for (int k = 0; k < num; k++) {
@@ -199,12 +198,6 @@ void cavity_flow(int nt, float *u, float *v, float dt, float dx, float dy,
   }
 }
 
-
-void indexfill(float *x, int dimx, int dimy) {
-  for (int k = 0; k < dimy * dimx; k++)
-    x[k] = pow(k, 2);
-}
-
 int main() {
   float x[nx];
   float y[ny];
@@ -222,16 +215,12 @@ int main() {
   fill(b, 0, nx, ny);
   float p[ny * nx];
   fill(p, 0, nx, ny);
-  fill(u, 0, nx, ny);
-  fill(v, 0, nx, ny);
-  fill(b, 0, nx, ny);
-  fill(p, 0, nx, ny);
   auto start = std::chrono::high_resolution_clock::now();
   cavity_flow(nt, u, v, dt, dx, dy, p, rho, nu);
   auto finish = std::chrono::high_resolution_clock::now();
-  npprint(u);
-  npprint(v);
-  npprint(p);
+  npprint(u, ny, nx, "U");
+  npprint(v, ny, nx, "V");
+  npprint(p, ny, nx, "P");
   std::chrono::duration<double> elapsed = finish - start;
   printf("Elapsed time: %3.3f s\n", elapsed.count());
   for (int k =1; k<10; k++) printf("====");

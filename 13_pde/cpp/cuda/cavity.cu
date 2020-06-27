@@ -11,8 +11,8 @@ float lb = 0;
 float ub = 2;
 const int nx = 41;
 const int ny = 41;
-int nt = 10;
-int nit = 100;
+int nt = 500;
+int nit = 50;
 int c = 1;
 float dx = ub / float(nx - 1);
 float dy = ub / float(ny - 1);
@@ -36,12 +36,6 @@ void npprint(float *u, int dimx = ny, int dimy = nx, string msg = "OUT: ") {
 
   printf("x-------------------------------x\n");
 }
-__global__ void npp(float *a, int N) {
-  int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i > N)
-    return;
-  a[i] = i;
-}
 
 void linspace(float *x, int lb, int ub, int num) {
   for (int k = 0; k < num; k++) {
@@ -59,10 +53,6 @@ void fill(float *x, float fillnum, int dimx, int dimy) {
     x[k] = fillnum;
 }
 
-void indexfill(float *x, int dimx, int dimy) {
-  for (int k = 0; k < dimy * dimx; k++)
-    x[k] = pow(k, 2);
-}
 void meshgrid(float *x, float *y, float *X, float *Y) {
   int dimx = ny;
   int dimy = ny;
@@ -216,8 +206,7 @@ __global__ void cmargin(float *u, float *v, int nx, int ny) {
   __syncthreads();
 }
 void cavity_flow(int nt, float *u, float *v, float *un, float *vn, float dt,
-                 float dx, float dy, float *p, float *pn, float rho,
-                 float nu) {
+                 float dx, float dy, float *p, float *pn, float rho, float nu) {
   /*
   def cavity_flow(nt, u, v, dt, dx, dy, p, rho, nu):
 */
@@ -238,7 +227,6 @@ void cavity_flow(int nt, float *u, float *v, float *un, float *vn, float dt,
     cudaDeviceSynchronize();
   }
   cudaFree(b);
-
 }
 
 int main() {
@@ -271,9 +259,9 @@ int main() {
   cudaDeviceSynchronize();
 
   auto finish = std::chrono::high_resolution_clock::now();
-  npprint(u);
-  npprint(v);
-  npprint(p);
+  npprint(u, ny, nx, "U");
+  npprint(v, ny, nx, "V");
+  npprint(p, ny, nx, "P");
   std::chrono::duration<double> elapsed = finish - start;
   printf("Elapsed time: %3.3f s\n", elapsed.count());
 
