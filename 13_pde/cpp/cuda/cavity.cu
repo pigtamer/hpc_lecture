@@ -9,10 +9,10 @@ using namespace std;
 
 float lb = 0;
 float ub = 2;
-const int nx = 11;
-const int ny = 11;
+const int nx = 41;
+const int ny = 41;
 int nt = 10;
-int nit = 5;
+int nit = 100;
 int c = 1;
 float dx = ub / float(nx - 1);
 float dy = ub / float(ny - 1);
@@ -20,6 +20,28 @@ float dy = ub / float(ny - 1);
 float rho = 1;
 float nu = 0.1;
 float dt = 0.001;
+
+void npprint(float *u, int dimx = ny, int dimy = nx, string msg = "OUT: ") {
+  printf("%s\n", msg.c_str());
+  printf("x-------------------------------x\n");
+  printf("[\n");
+  for (int i = 0; i < dimx; i++) {
+    printf("[");
+
+    for (int k = 0; k < dimy; k++)
+      printf("%3.4f, ", u[i * dimy + k]);
+    printf("],\n");
+  }
+  printf("]\n");
+
+  printf("x-------------------------------x\n");
+}
+__global__ void npp(float *a, int N) {
+  int i = blockIdx.x * blockDim.x + threadIdx.x;
+  if (i > N)
+    return;
+  a[i] = i;
+}
 
 void linspace(float *x, int lb, int ub, int num) {
   for (int k = 0; k < num; k++) {
@@ -85,233 +107,180 @@ def build_up_b(b, rho, dt, u, v, dx, dy):
             2)));
 }
 
-__global__ void pressure_poisson(float *p, float *pn, float dx, float dy,
-                                 float *b, int nx, int ny, int nit) {
-  /*
-def pressure_poisson(p, dx, dy, b):
-
-*/
+__global__ void pmargin(float *p, int nx, int ny) {
   int xlim = ny;
   int ylim = nx;
   int idx = blockIdx.x;
   int idy = threadIdx.x;
-  // if(idx >= xlim - 2) return;
-  // if (idy >= ylim - 2) return;
 
-//   for (int q = 0; q < nit; q++) 
-  {
-    printf("%d %d; ", idx, idy);
+  p[0 * ylim + idy] = p[1 * ylim + idy]; // dp/dy = 0 at y = 0
+  p[(xlim - 1) * ylim + idy] = 0;        // p = 0 at y = 2
+  __syncthreads();
 
-    if (idx < xlim - 2 && idy < ylim - 2) {
-        copy(p, pn, ny, nx);
-        __syncthreads();
-      p[(idx + 1) * nx + idy + 1] =
-          //   pn[(idx + 1) * nx + idy+2] + b[(idx + 1) * nx + idy + 1];
-          (
-            //   (pn[(idx + 1) * nx + idy + 2] + 
-            // (
-        //   pn[(idx + 1) * nx + idy]) +
-            (pn[(idx + 2) * nx + idy + 1] + 
-            pn[(idx)*nx + idy + 1]) -
-               b[(idx + 1) * nx + idy + 1]);
-        
-    //   (((pn[(idx + 1) * nx + idy + 2] + pn[(idx + 1) * nx + idy]) * pow(dy, 2) +
-    //     (pn[(idx + 2) * nx + idy + 1] + pn[(idx)*nx + idy + 1]) * pow(dx, 2)) /
-    //        (2 * (pow(dx, 2) + pow(dy, 2))) -
-    //    pow(dx, 2) * pow(dy, 2) / (2 * (pow(dx, 2) + pow(dy, 2))) *
-    //        b[(idx + 1) * nx + idy + 1]);
-    }
+  p[idx * ylim + ylim - 1] = p[idx * ylim + ylim - 2]; // dp/dx = 0 at x =2
+  p[idx * ylim + 0] = p[idx * ylim + 1];               // dp/dx = 0 at x =0
+  __syncthreads();
+}
 
-    // p[0 * ylim + idy] = p[1 * ylim + idy]; // dp/dy = 0 at y = 0
-    // __syncthreads();
-    // p[(xlim - 1) * ylim + idy] = 0;        // p = 0 at y = 2
-    // __syncthreads();
+__global__ void pupdate(float *p, float *pn, float dx, float dy, float *b,
+                        int nx, int ny, int nit) {
+  int xlim = ny;
+  int ylim = nx;
+  int idx = blockIdx.x;
+  int idy = threadIdx.x;
+  if (idx < xlim - 2 && idy < ylim - 2) {
+    copy(p, pn, ny, nx);
 
-    // p[idx * ylim + ylim - 1] = p[idx * ylim + ylim - 2]; // dp/dx = 0 at x =
-    // 2
-    // __syncthreads();
+    __syncthreads();
+    p[(idx + 1) * nx + idy + 1] =
 
-    // p[idx * ylim + 0] = p[idx * ylim + 1];               // dp/dx = 0 at x =
-    // 0
-    // __syncthreads();
+        (((pn[(idx + 1) * nx + idy + 2] + pn[(idx + 1) * nx + idy]) *
+              pow(dy, 2) +
+          (pn[(idx + 2) * nx + idy + 1] + pn[(idx)*nx + idy + 1]) *
+              pow(dx, 2)) /
+             (2 * (pow(dx, 2) + pow(dy, 2))) -
+         pow(dx, 2) * pow(dy, 2) / (2 * (pow(dx, 2) + pow(dy, 2))) *
+             b[(idx + 1) * nx + idy + 1]);
+  }
+  __syncthreads();
+}
+
+void pressure_poisson(float *p, float *pn, float dx, float dy, float *b, int nx,
+                      int ny, int nit) {
+  /*
+def pressure_poisson(p, dx, dy, b):
+
+*/
+  for (int q = 0; q < nit; q++) {
+    pupdate<<<ny, nx>>>(p, pn, dx, dy, b, nx, ny, nit);
+    cudaDeviceSynchronize();
+    pmargin<<<ny, nx>>>(p, nx, ny);
+    cudaDeviceSynchronize();
   }
 }
+__global__ void cupdate(int nt, float *u, float *v, float *un, float *vn,
+                        float dt, float dx, float dy, float *p, float rho,
+                        float nu) {
+  int idx = blockIdx.x;
+  int idy = threadIdx.x;
+  copy(u, un, ny, nx);
+  copy(v, vn, ny, nx);
+  __syncthreads();
+  u[(idx + 1) * nx + idy + 1] =
+      (un[(idx + 1) * nx + idy + 1] -
+       un[(idx + 1) * nx + idy + 1] * dt / dx *
+           (un[(idx + 1) * nx + idy + 1] - un[(idx + 1) * nx + idy]) -
+       vn[(idx + 1) * nx + idy + 1] * dt / dy *
+           (un[(idx + 1) * nx + idy + 1] - un[(idx)*nx + idy + 1]) -
+       dt / (2 * rho * dx) *
+           (p[(idx + 1) * nx + idy + 2] - p[(idx + 1) * nx + idy]) +
+       nu * (dt / pow(dx, 2) *
+                 (un[(idx + 1) * nx + idy + 2] -
+                  2 * un[(idx + 1) * nx + idy + 1] + un[(idx + 1) * nx + idy]) +
+             dt / pow(dy, 2) *
+                 (un[(idx + 2) * nx + idy + 1] -
+                  2 * un[(idx + 1) * nx + idy + 1] + un[(idx)*nx + idy + 1])));
+  __syncthreads();
 
-// __global__ void cavity_flow(int nt, float *u, float *v,
-//                  float dt, float dx, float dy, float *p, float rho, float nu)
-// {
-//     /*
-//     def cavity_flow(nt, u, v, dt, dx, dy, p, rho, nu):
-// */
-//     int xlim = ny;
-//     int ylim = nx;
-//     float un[ny * nx]; // copy !!!
-//     float vn[ny * nx];
-//     float b[ny * nx];
+  v[(idx + 1) * nx + idy + 1] =
+      (vn[(idx + 1) * nx + idy + 1] -
+       un[(idx + 1) * nx + idy + 1] * dt / dx *
+           (vn[(idx + 1) * nx + idy + 1] - vn[(idx + 1) * nx + idy]) -
+       vn[(idx + 1) * nx + idy + 1] * dt / dy *
+           (vn[(idx + 1) * nx + idy + 1] - vn[(idx)*nx + idy + 1]) -
+       dt / (2 * rho * dy) *
+           (p[(idx + 2) * nx + idy + 1] - p[(idx)*nx + idy + 1]) +
+       nu * (dt / pow(dx, 2) *
+                 (vn[(idx + 1) * nx + idy + 2] -
+                  2 * vn[(idx + 1) * nx + idy + 1] + vn[(idx + 1) * nx + idy]) +
+             dt / pow(dy, 2) *
+                 (vn[(idx + 2) * nx + idy + 1] -
+                  2 * vn[(idx + 1) * nx + idy + 1] + vn[(idx)*nx + idy + 1])));
+  __syncthreads();
+}
 
-//     for (int n = 0; n < nt; n++)
-//     {
-//         copy(u, un, ny, nx);
-//         copy(v, vn, ny, nx);
-//         build_up_b(b, rho, dt, u, v, dx, dy);
-//         pressure_poisson(p, dx, dy, b);
+__global__ void cmargin(float *u, float *v, int nx, int ny) {
+  int xlim = ny;
+  int ylim = nx;
+  int idx = blockIdx.x;
+  int idy = threadIdx.x;
+  u[0 * ylim + idy] = 0;
+  u[(xlim - 1) * ylim + idy] = 10;
+  v[0 * ylim + idy] = 0;
+  v[(xlim - 1) * ylim + idy] = 0;
+  __syncthreads();
+  u[idx * ylim + 0] = 0;
+  v[idx * ylim + 0] = 0;
+  u[idx * ylim + ylim - 1] = 0;
+  v[idx * ylim + ylim - 1] = 0;
+  __syncthreads();
+}
+void cavity_flow(int nt, float *u, float *v, float *un, float *vn, float dt,
+                 float dx, float dy, float *p, float *pn, float rho,
+                 float nu) {
+  /*
+  def cavity_flow(nt, u, v, dt, dx, dy, p, rho, nu):
+*/
+  float *b;
+  cudaMallocManaged(&b, nx * ny * sizeof(float));
+  fill(b, 0, nx, ny);
+  for (int n = 0; n < nt; n++) {
 
-//         for (int idx = 0; idx < xlim - 2; idx++)
-//             for (int idy = 0; idy < ylim - 2; idy++)
-//             {
-//                 u[(idx + 1) * nx + idy + 1] = (un[(idx + 1) * nx + idy + 1] -
-//                                                un[(idx + 1) * nx + idy + 1] *
-//                                                dt / dx *
-//                                                    (un[(idx + 1) * nx + idy +
-//                                                    1] - un[(idx + 1) * nx +
-//                                                    idy]) -
-//                                                vn[(idx + 1) * nx + idy + 1] *
-//                                                dt / dy *
-//                                                    (un[(idx + 1) * nx + idy +
-//                                                    1] - un[(idx)*nx + idy +
-//                                                    1]) -
-//                                                dt / (2 * rho * dx) * (p[(idx
-//                                                + 1) * nx + idy + 2] - p[(idx
-//                                                + 1) * nx + idy]) + nu * (dt /
-//                                                pow(dx, 2) *
-//                                                          (un[(idx + 1) * nx +
-//                                                          idy + 2] - 2 *
-//                                                          un[(idx + 1) * nx +
-//                                                          idy + 1] + un[(idx +
-//                                                          1) * nx + idy]) +
-//                                                      dt / pow(dy, 2) *
-//                                                          (un[(idx + 2) * nx +
-//                                                          idy + 1] - 2 *
-//                                                          un[(idx + 1) * nx +
-//                                                          idy + 1] +
-//                                                          un[(idx)*nx + idy +
-//                                                          1])));
+    build_up_b<<<nx, ny>>>(b, rho, dt, u, v, dx, dy, nx, ny);
+    cudaDeviceSynchronize();
 
-//                 v[(idx + 1) * nx + idy + 1] = (vn[(idx + 1) * nx + idy + 1] -
-//                                                un[(idx + 1) * nx + idy + 1] *
-//                                                dt / dx *
-//                                                    (vn[(idx + 1) * nx + idy +
-//                                                    1] - vn[(idx + 1) * nx +
-//                                                    idy]) -
-//                                                vn[(idx + 1) * nx + idy + 1] *
-//                                                dt / dy *
-//                                                    (vn[(idx + 1) * nx + idy +
-//                                                    1] - vn[(idx)*nx + idy +
-//                                                    1]) -
-//                                                dt / (2 * rho * dy) * (p[(idx
-//                                                + 2) * nx + idy + 1] -
-//                                                p[(idx)*nx + idy + 1]) + nu *
-//                                                (dt / pow(dx, 2) *
-//                                                          (vn[(idx + 1) * nx +
-//                                                          idy + 2] - 2 *
-//                                                          vn[(idx + 1) * nx +
-//                                                          idy + 1] + vn[(idx +
-//                                                          1) * nx + idy]) +
-//                                                      dt / pow(dy, 2) *
-//                                                          (vn[(idx + 2) * nx +
-//                                                          idy + 1] - 2 *
-//                                                          vn[(idx + 1) * nx +
-//                                                          idy + 1] +
-//                                                          vn[(idx)*nx + idy +
-//                                                          1])));
-//             }
-//         for (int k = 0; k < ylim; k++)
-//         {
-//             u[0 * ylim + k] = 0;
-//             u[(xlim - 1) * ylim + k] = 10;
-//             v[0 * ylim + k] = 0;
-//             v[(xlim - 1) * ylim + k] = 0;
-//         }
-//         for (int idx = 0; idx < xlim; idx++)
-//         {
-//             u[idx * ylim + 0] = 0;
-//             v[idx * ylim + 0] = 0;
-//             u[idx * ylim + ylim - 1] = 0;
-//             v[idx * ylim + ylim - 1] = 0;
-//         }
-//     }
-// }
+    pressure_poisson(p, pn, dx, dy, b, nx, ny, nit);
+    cudaDeviceSynchronize();
 
-void npprint(float *u, int dimx = ny, int dimy = nx, string msg = "OUT: ") {
-  printf("%s\n", msg.c_str());
-  printf("x-------------------------------x\n");
-  printf("[\n");
-  for (int i = 0; i < dimx; i++) {
-    printf("[");
-
-    for (int k = 0; k < dimy; k++)
-      printf("%3.4f, ", u[i * dimy + k]);
-    printf("],\n");
+    cupdate<<<nx, ny>>>(nt, u, v, un, vn, dt, dx, dy, p, rho, nu);
+    cudaDeviceSynchronize();
+    cmargin<<<nx, ny>>>(u, v, nx, ny);
+    cudaDeviceSynchronize();
   }
-  printf("]\n");
+  cudaFree(b);
 
-  printf("x-------------------------------x\n");
 }
-__global__ void npp(float *a, int N) {
-  int i = blockIdx.x * blockDim.x + threadIdx.x;
-  if (i > N)
-    return;
-  a[i] = i;
-}
+
 int main() {
   float x[nx];
   float y[ny];
   float X[ny * nx];
   float Y[ny * nx];
   linspace(x, lb, ub, nx);
-  // npprint(x, 1, nx);
   linspace(y, lb, ub, ny);
   meshgrid(x, y, X, Y);
-  // npprint(X, ny, nx);
-  // npprint(Y);
 
-  // float u[ny * nx]; fill(u, 1, nx, ny);
-  // float v[ny * nx]; fill(v, 2, nx, ny);
-  // float b[ny * nx]; fill(b, 0, nx, ny);
-  // float p[ny * nx]; fill(p, 0, nx, ny);
-
-  float *u;
-  float *v;
+  float *u, *un;
+  float *v, *vn;
   float *p, *pn;
-  float *b;
-  cudaMallocManaged(&b, nx * ny * sizeof(float));
   cudaMallocManaged(&p, nx * ny * sizeof(float));
   cudaMallocManaged(&pn, nx * ny * sizeof(float));
   cudaMallocManaged(&u, nx * ny * sizeof(float));
   cudaMallocManaged(&v, nx * ny * sizeof(float));
-  fill(u, 1, nx, ny);
-  fill(v, 2, nx, ny);
-  indexfill(v, nx, ny);
-  fill(b, 0, nx, ny);
+  cudaMallocManaged(&un, nx * ny * sizeof(float));
+  cudaMallocManaged(&vn, nx * ny * sizeof(float));
+  fill(u, 0, nx, ny);
+  fill(v, 0, nx, ny);
   fill(p, 0, nx, ny);
   fill(pn, 0, nx, ny);
+  fill(vn, 0, nx, ny);
+  fill(un, 0, nx, ny);
 
   auto start = std::chrono::high_resolution_clock::now();
-  // cavity_flow(nt, u, v, dt, dx, dy, p, rho, nu);
+  cavity_flow(nt, u, v, un, vn, dt, dx, dy, p, pn, rho, nu);
+  cudaDeviceSynchronize();
+
   auto finish = std::chrono::high_resolution_clock::now();
-  // npprint(u);
-  // npprint(v);
-  // npprint(p);
-  // npprint(b);
+  npprint(u);
+  npprint(v);
+  npprint(p);
   std::chrono::duration<double> elapsed = finish - start;
   printf("Elapsed time: %3.3f s\n", elapsed.count());
 
-  // float *pg;
-  // float *bg;
-  // cudaMallocManaged(&pg, nx*ny*sizeof(float));
-  // cudaMallocManaged(&bg, nx*ny*sizeof(float));
-  // npp<<<nx, ny>>>(pg, nx*ny);
-  build_up_b<<<nx, ny>>>(b, rho, dt, u, v, dx, dy, nx, ny);
-  // fill(b, 1, nx, ny);
-  pressure_poisson<<<nx, ny>>>(p, pn, dx, dy, b, nx, ny, nit);
-  cudaDeviceSynchronize();
-  // cudaMemcpy(bg, b, nx*ny*sizeof(float), cudaMemcpyDeviceToHost);
-
-  //   npprint(b); // confirmed
-  npprint(p);
-  // cout << &bg;
   cudaFree(p);
-  cudaFree(b);
+  cudaFree(pn);
+  cudaFree(vn);
+  cudaFree(un);
   cudaFree(u);
   cudaFree(v);
 }

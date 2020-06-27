@@ -9,10 +9,10 @@ using namespace std;
 
 float lb = 0;
 float ub = 2;
-int nx = 11;
-int ny = 11;
+int nx = 41;
+int ny = 41;
 int nt = 10;
-int nit = 5;
+int nit = 100;
 int c = 1;
 float dx = ub / float(nx - 1);
 float dy = ub / float(ny - 1);
@@ -20,6 +20,23 @@ float dy = ub / float(ny - 1);
 float rho = 1;
 float nu = 0.1;
 float dt = 0.001;
+
+void npprint(float *u, int dimx = ny, int dimy = nx, string msg = "OUT: ") {
+  printf("%s\n", msg.c_str());
+  printf("x-------------------------------x\n");
+  printf("[\n");
+  for (int i = 0; i < dimx; i++) {
+    printf("[");
+
+    for (int k = 0; k < dimy; k++)
+      printf("%3.4f, ", u[i * dimy + k]);
+    printf("],\n");
+  }
+  printf("]\n");
+
+  printf("x-------------------------------x\n");
+}
+
 
 void linspace(float *x, int lb, int ub, int num) {
   for (int k = 0; k < num; k++) {
@@ -88,37 +105,29 @@ def pressure_poisson(p, dx, dy, b):
   int xlim = ny;
   int ylim = nx;
 
-//   for (int q = 0; q < nit; q++)
+  for (int q = 0; q < nit; q++)
    {
     for (int idx = 0; idx < xlim - 2; idx++)
       for (int idy = 0; idy < ylim - 2; idy++) {
         copy(p, pn, ny, nx);
 
         p[(idx + 1) * nx + idy + 1] =
-        //   pn[(idx + 1) * nx + idy+2] + b[(idx + 1) * nx + idy + 1];
-(
-    // (pn[(idx + 1) * nx + idy + 2] +
-    // ( 
-// pn[(idx + 1) * nx + idy]) +
-            (pn[(idx + 2) * nx + idy + 1] + 
-            pn[(idx)*nx + idy + 1]) -
-               b[(idx + 1) * nx + idy + 1]);
-            // (((pn[(idx + 1) * nx + idy + 2] + pn[(idx + 1) * nx + idy]) *
-            //       pow(dy, 2) +
-            //   (pn[(idx + 2) * nx + idy + 1] + pn[(idx)*nx + idy + 1]) *
-            //       pow(dx, 2)) /
-            //      (2 * (pow(dx, 2) + pow(dy, 2))) -
-            //  pow(dx, 2) * pow(dy, 2) / (2 * (pow(dx, 2) + pow(dy, 2))) *
-            //      b[(idx + 1) * nx + idy + 1]);
+            (((pn[(idx + 1) * nx + idy + 2] + pn[(idx + 1) * nx + idy]) *
+                  pow(dy, 2) +
+              (pn[(idx + 2) * nx + idy + 1] + pn[(idx)*nx + idy + 1]) *
+                  pow(dx, 2)) /
+                 (2 * (pow(dx, 2) + pow(dy, 2))) -
+             pow(dx, 2) * pow(dy, 2) / (2 * (pow(dx, 2) + pow(dy, 2))) *
+                 b[(idx + 1) * nx + idy + 1]);
       }
-    // for (int k = 0; k < ylim; k++) {
-    //   p[0 * ylim + k] = p[1 * ylim + k]; // dp/dy = 0 at y = 0
-    //   p[(xlim - 1) * ylim + k] = 0;      // p = 0 at y = 2
-    // }
-    // for (int idx = 0; idx < xlim; idx++) {
-    //   p[idx * ylim + ylim - 1] = p[idx * ylim + ylim - 2]; // dp/dx = 0 at x = 2
-    //   p[idx * ylim + 0] = p[idx * ylim + 1];               // dp/dx = 0 at x = 0
-    // }
+    for (int k = 0; k < ylim; k++) {
+      p[0 * ylim + k] = p[1 * ylim + k]; // dp/dy = 0 at y = 0
+      p[(xlim - 1) * ylim + k] = 0;      // p = 0 at y = 2
+    }
+    for (int idx = 0; idx < xlim; idx++) {
+      p[idx * ylim + ylim - 1] = p[idx * ylim + ylim - 2]; // dp/dx = 0 at x = 2
+      p[idx * ylim + 0] = p[idx * ylim + 1];               // dp/dx = 0 at x = 0
+    }
   }
 }
 
@@ -190,21 +199,6 @@ void cavity_flow(int nt, float *u, float *v, float dt, float dx, float dy,
   }
 }
 
-void npprint(float *u, int dimx = ny, int dimy = nx, string msg = "OUT: ") {
-  printf("%s\n", msg.c_str());
-  printf("x-------------------------------x\n");
-  printf("[\n");
-  for (int i = 0; i < dimx; i++) {
-    printf("[");
-
-    for (int k = 0; k < dimy; k++)
-      printf("%3.4f, ", u[i * dimy + k]);
-    printf("],\n");
-  }
-  printf("]\n");
-
-  printf("x-------------------------------x\n");
-}
 
 void indexfill(float *x, int dimx, int dimy) {
   for (int k = 0; k < dimy * dimx; k++)
@@ -217,11 +211,8 @@ int main() {
   float X[ny * nx];
   float Y[ny * nx];
   linspace(x, lb, ub, nx);
-  // npprint(x, 1, nx);
   linspace(y, lb, ub, ny);
   meshgrid(x, y, X, Y);
-  // npprint(X, ny, nx);
-  // npprint(Y);
 
   float u[ny * nx];
   fill(u, 0, nx, ny);
@@ -231,22 +222,18 @@ int main() {
   fill(b, 0, nx, ny);
   float p[ny * nx];
   fill(p, 0, nx, ny);
-  fill(u, 1, nx, ny);
-  fill(v, 2, nx, ny);
-  indexfill(v, nx, ny);
+  fill(u, 0, nx, ny);
+  fill(v, 0, nx, ny);
   fill(b, 0, nx, ny);
   fill(p, 0, nx, ny);
   auto start = std::chrono::high_resolution_clock::now();
-  build_up_b(b, rho, dt, u, v, dx, dy);
-//   npprint(b);
-  // fill(b, 1, nx, ny);
-  pressure_poisson(p, dx, dy, b);
-  // cavity_flow(nt, u, v, dt, dx, dy, p, rho, nu);
+  cavity_flow(nt, u, v, dt, dx, dy, p, rho, nu);
   auto finish = std::chrono::high_resolution_clock::now();
-  // npprint(u);
-  // npprint(v);
+  npprint(u);
+  npprint(v);
   npprint(p);
-//   npprint(b);
   std::chrono::duration<double> elapsed = finish - start;
   printf("Elapsed time: %3.3f s\n", elapsed.count());
+  for (int k =1; k<10; k++) printf("====");
+  printf("\n");
 }
