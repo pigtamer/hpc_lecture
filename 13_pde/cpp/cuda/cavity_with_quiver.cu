@@ -1,3 +1,9 @@
+/*
+COMPILE WITH:
+ nvcc cavity.cu -I/usr/include/python2.7 -lpython2.7&& ./a.out
+*/
+
+#include "../matplotlibcpp.h"
 #include <array>
 #include <cassert>
 #include <chrono>
@@ -5,6 +11,7 @@
 #include <math.h>
 #include <string>
 
+namespace plt = matplotlibcpp;
 using namespace std;
 
 float lb = 0;
@@ -34,6 +41,20 @@ void npprint(float *u, int dimx = ny, int dimy = nx, string msg = "OUT: ") {
   }
   printf("]\n");
 
+  printf("x-------------------------------x\n");
+}
+
+void npprint(vector<vector<float>> u, string msg = "OUT: ") {
+  printf("%s\n", msg.c_str());
+  printf("x-------------------------------x\n");
+  printf("[\n");
+  for (int i = 0; i < u.size(); i++) {
+    printf("[");
+    for (int k = 0; k < u[0].size(); k++)
+      cout << u[i][k] << ", ";
+    printf("],\n");
+  }
+  printf("]\n");
   printf("x-------------------------------x\n");
 }
 
@@ -195,7 +216,7 @@ __global__ void cmargin(float *u, float *v, int nx, int ny) {
   int idx = blockIdx.x;
   int idy = threadIdx.x;
   u[0 * ylim + idy] = 0;
-  u[(xlim - 1) * ylim + idy] = 10;
+  u[(xlim - 1) * ylim + idy] = 1;
   v[0 * ylim + idy] = 0;
   v[(xlim - 1) * ylim + idy] = 0;
   __syncthreads();
@@ -205,7 +226,6 @@ __global__ void cmargin(float *u, float *v, int nx, int ny) {
   v[idx * ylim + ylim - 1] = 0;
   __syncthreads();
 }
-
 void cavity_flow(int nt, float *u, float *v, float *un, float *vn, float dt,
                  float dx, float dy, float *p, float *pn, float rho, float nu) {
   /*
@@ -228,6 +248,12 @@ void cavity_flow(int nt, float *u, float *v, float *un, float *vn, float dt,
     cudaDeviceSynchronize();
   }
   cudaFree(b);
+}
+
+void reshapeToVector(float *x, vector<float> &vx) {
+  int ny = vx.size();
+  for (int idx = 0; idx < ny; idx++)
+    vx[idx] = x[idx];
 }
 
 int main() {
@@ -265,6 +291,23 @@ int main() {
   npprint(p, ny, nx, "P");
   std::chrono::duration<double> elapsed = finish - start;
   printf("GPU Elapsed time: %3.3f s\n", elapsed.count());
+
+  vector<float> vec_X(nx * ny);
+  vector<float> vec_Y(ny * nx);
+  vector<float> vec_u(ny * nx);
+  vector<float> vec_v(ny * nx);
+  vector<float> vec_p(ny * nx);
+
+  reshapeToVector(u, vec_u);
+  reshapeToVector(v, vec_v);
+  reshapeToVector(p, vec_p);
+  reshapeToVector(X, vec_X);
+  reshapeToVector(Y, vec_Y);
+
+  plt::figure();
+  plt::contour(vec_X, vec_Y, vec_u);
+  plt::quiver(vec_X, vec_Y, vec_u, vec_v);
+  plt::show();
 
   cudaFree(p);
   cudaFree(pn);
