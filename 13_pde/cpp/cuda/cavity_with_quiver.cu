@@ -1,6 +1,11 @@
 /*
 COMPILE WITH:
  nvcc cavity.cu -I/usr/include/python2.7 -lpython2.7&& ./a.out
+
+ PLOTTING FUNCTION FROM:
+
+ https://github.com/lava/matplotlib-cpp
+ 
 */
 
 #include "../matplotlibcpp.h"
